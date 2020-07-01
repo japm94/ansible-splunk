@@ -1,0 +1,112 @@
+---
+- name: Provision a machine
+  hosts: 127.0.0.1
+  vars:
+    SPLUNK_HOME: "/var/lib/splunk"
+    item: "splunk-7.3.4-13e97039fb65-Linux-x86_64.tgz"
+    vg_name: vg_system 
+    lv_name: lv_splunk
+    lv_size: 50g
+  connection: local
+  become: yes
+  become_method: sudo
+  tasks:
+  - name: Install the NTP daemon to synchronize the clocks to ms.
+    yum:
+      name: ntpd
+
+  - name: Make sure ntp is started, and is enabled on restart.
+    service: 
+      name: ntp 
+      state: started
+      enabled: yes
+
+  - name: Diasble ulimit limitation
+    copy:
+      dest: files/20-nproc.conf 
+      src: /etc/init.d/splunk
+      owner: root
+      group: root
+      mode: '0644'
+      backup: yes
+
+  - name: Increasing NPROC and NOFILE
+    copy:
+      dest: files/system.conf 
+      src: /etc/sytemd/system.conf
+      owner: root
+      group: root
+      mode: '0644'
+      backup: yes
+
+  - name: Creating Splunk Group
+    group:
+      name: splunk
+  
+  - name: Creating Splunk User
+    user:
+      name: splunk
+      group: splunk
+      shell: /bin/bash
+      home: /var/lib/splunk
+
+  - name: Mount logical disk 
+    # lvol:
+    #     vg: "{{ vg_name }}"
+    #     lv: "{{ lv_name }}"
+    #     size: "{{ require_lv_size }}"
+    #     active: yes
+    #     force: no
+    #     state: present
+  
+  - name: Mount a xfs filesystem on /dev/vg_system/lv_splunk 
+    # filesystem:
+    #   fstype: ext2
+    #   dev: /dev/vg_system/lv_splunk
+
+  - name: Disable THP persistently
+    copy: 
+      src: files/disable-thp.service 
+      dest: /etc/systemd/system/disable-thp.service
+      owner: root 
+      group: root 
+      mode: 0755
+      backup: yes
+
+  - name: Enable THP service
+    service: 
+      name: disable-thp.service 
+      enabled: yes
+
+  - name: Start THP service
+    service: 
+      name: disable-thp.service
+      state: started
+
+  - name: Unconpressing Splunk package
+    unarchive:
+      src: "files/{{ item }}"
+      dest: "/var/lib/"
+      mode: 0755
+
+  - name: Recursively change Splunk ownership of a directory
+    file:
+      path: /var/lib/splunk
+      state: directory
+      recurse: yes
+      owner: splunk
+      group: splunk
+
+  - name: Starting Splunk
+    shell: "{{ SPLUNK_HOME }}/bin/splunk start --accept-license"
+    become: yes
+    become_user: splunk
+
+  - name: Enabling boot start
+    shell: "{{ SPLUNK_HOME }}/bin/splunk enable boot-start -user splunk"
+  
+  - name: Configurging Splunk boot-start script
+    copy:
+      src: files/splunk 
+      dest: /etc/init.d/splunk
+

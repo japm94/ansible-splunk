@@ -1,0 +1,25 @@
+---
+- name: Provision a machine
+  hosts: 127.0.0.1
+  connection: local
+  become: yes
+  become_method: sudo
+  tasks:
+  - name: Disable THP persistently
+    copy: 
+      src: files/disable-thp.service 
+      dest: /etc/systemd/system/disable-thp.service 
+      owner: root 
+      group: root 
+      mode: 0755
+
+  - name: Enable THP service
+    service: 
+      name: disable-thp.service 
+      enabled: yes
+      daemon_reload: yes
+
+  - name: Start THP service
+    service: 
+      name: disable-thp.service 
+      state: started
